@@ -24,3 +24,6 @@ yarn-error.log*
 # Vercel & TypeScript cache
 .vercel
 *.tsbuildinfo
+
+# Amazon Q
+.amazonq/
