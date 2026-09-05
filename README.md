@@ -57,7 +57,7 @@ Agent Workflow:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           AI ORCHESTRATION LAYER                            │
 │  lib/agent.js: sanitizeInput() ──► Gemini agentic loop                      │
-│    ├── Model resolution      ──► process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
+│    ├── Model resolution      ──► process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite'
 │    ├── search_products tool  ──► lib/productSearch.js ──► SQLite (store.db) │
 │    ├── select_product tool   ──► lib/safety.js (enforces budget & categories)│
 │    └── audit logging         ──► lib/audit.js (immutably logs every event)  │
@@ -221,8 +221,8 @@ Populate `.env.local` with your API credentials:
 # Get from: https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=your_gemini_api_key_here
 
-# Optional: Override default Gemini model (defaults to locked-in 'gemini-2.5-flash-lite')
-GEMINI_MODEL=gemini-2.5-flash-lite
+# Optional: Override default Gemini model (defaults to locked-in 'gemini-3.1-flash-lite')
+GEMINI_MODEL=gemini-3.1-flash-lite
 
 # Required: Razorpay Test Key ID & Secret
 # Get from: https://dashboard.razorpay.com/app/keys (Use TEST mode!)
@@ -401,7 +401,7 @@ buyer-agent/
 | Variable | Required | Default | Description |
 |---|:---:|:---:|---|
 | `GEMINI_API_KEY` | **Yes** | — | Google AI Studio API Key for Gemini |
-| `GEMINI_MODEL` | No | `gemini-2.5-flash-lite` | Model identifier used by `@google/genai` (resolved in `lib/agent.js`) |
+| `GEMINI_MODEL` | No | `gemini-3.1-flash-lite` | Model identifier used by `@google/genai` (resolved in `lib/agent.js`) |
 | `RAZORPAY_KEY_ID` | **Yes** | — | Razorpay API Key ID (Test Mode: `rzp_test_...`) |
 | `RAZORPAY_KEY_SECRET` | **Yes** | — | Razorpay API Key Secret |
 | `MAX_BUDGET_INR` | No | `5000` | Maximum spend allowed per transaction in INR |
