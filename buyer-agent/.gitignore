@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Database backups
+*.backup
+store.db.backup
+ecommerce.db.backup

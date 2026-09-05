@@ -27,3 +27,8 @@ yarn-error.log*
 
 # Amazon Q
 .amazonq/
+
+# Database backups
+*.backup
+store.db.backup
+ecommerce.db.backup
