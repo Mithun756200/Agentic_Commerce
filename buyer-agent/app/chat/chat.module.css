@@ -1,0 +1,322 @@
+/* ── Dedicated Chat / Purchase Terminal View ──────────────────────────────── */
+.chatRoot {
+  min-height: 100vh;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.chatContainer {
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px;
+  gap: 16px;
+}
+
+/* ── Top Scenario Bar ──────────────────────────────────────────────────────── */
+.scenarioBar {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scenarioBarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.scenarioBarTitle {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scenarioChips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.scenarioChip {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.scenarioChip:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-gold);
+  transform: translateY(-1px);
+}
+.scenarioChip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.scenarioChipNum {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.scenarioChipTitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Message Stream ───────────────────────────────────────────────────────── */
+.messageStream {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 10px 0;
+  min-height: 400px;
+}
+
+.messageCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: pageFadeSlide 0.2s var(--transition);
+}
+
+.messageHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.authorUser {
+  color: var(--btn-paper-bg);
+  font-weight: 700;
+}
+
+.authorAgent {
+  color: var(--accent-gold);
+  font-weight: 700;
+}
+
+.messageTime {
+  color: var(--text-muted);
+}
+
+.messageBody {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.messageBodyUser {
+  background: #110F0C;
+  border-left: 3px solid var(--btn-paper-bg);
+}
+
+.messageBodyAgent {
+  background: var(--bg-surface);
+  border-left: 3px solid var(--accent-gold);
+}
+
+/* ── Authorization Gate Moment ────────────────────────────────────────────── */
+.authGate {
+  margin-top: 14px;
+  background: #100E0A;
+  border: 1px solid var(--status-pass-border);
+  border-left: 4px solid var(--status-pass);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.authGateBlocked {
+  border-color: var(--status-block-border);
+  border-left-color: var(--status-block);
+  background: #120A08;
+}
+
+.authGateHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 12px;
+}
+
+.authGateTitle {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--status-pass);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.authGateTitleBlocked {
+  color: var(--status-block);
+}
+
+.authTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.authTable td {
+  padding: 6px 0;
+  font-size: 0.86rem;
+}
+
+.authTableLabel {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  width: 160px;
+}
+
+.authTableVal {
+  color: var(--text-primary);
+}
+
+.authAmount {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--btn-paper-bg);
+}
+
+.authChecklist {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.authActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+/* ── Order Status Block ───────────────────────────────────────────────────── */
+.orderCard {
+  margin-top: 12px;
+  background: #100E0A;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.orderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.orderDetails {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+/* ── Command Input Bar ────────────────────────────────────────────────────── */
+.inputBar {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-canvas);
+  border-top: 1px solid var(--border-subtle);
+  padding: 16px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inputWrapper {
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px 2px 14px;
+  transition: border-color var(--transition);
+}
+.inputWrapper:focus-within {
+  border-color: var(--accent-gold);
+}
+
+.inputPrompt {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+  margin-right: 10px;
+}
+
+.inputField {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  padding: 12px 0;
+  outline: none;
+}
+
+.inputMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
