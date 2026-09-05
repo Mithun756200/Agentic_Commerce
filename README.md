@@ -1,7 +1,7 @@
 # ⚡ AI Buyer Agent — Razorpay Agentic Commerce
 
 > **Track:** AI Growth & Agentic Commerce  
-> **Demo URL:** `http://localhost:3000` · **Audit Trail:** `http://localhost:3000/dashboard` or `http://localhost:3000/audit`  
+> **Demo URL:** `http://localhost:3000` · **Decision Trace & Audit Log:** `http://localhost:3000/audit` (alias: `http://localhost:3000/dashboard`)  
 > **Repository:** [https://github.com/Mithun756200/Agentic_Commerce](https://github.com/Mithun756200/Agentic_Commerce)
 
 A production-ready conversational shopping agent built for autonomous e-commerce. You describe what you want to buy in natural language. The AI autonomously searches the catalog, selects the best matching product, explains its rationale, checks hard safety boundaries, and offers complementary cross-sell add-ons. **Only after you explicitly approve** does it create an order and open a real Razorpay checkout. Every reasoning step and decision is immutably recorded to an inspectable SQLite audit trail.
@@ -17,10 +17,11 @@ A production-ready conversational shopping agent built for autonomous e-commerce
 - [Safety & Security Guarantees](#-safety--security-guarantees)
 - [Prerequisites & Necessary Installations](#-prerequisites--necessary-installations)
 - [Quick Start Guide](#-quick-start-guide)
+- [Example Conversational Prompts & Queries](#-example-conversational-prompts--queries)
 - [Live Demo & Testing Scenarios](#-live-demo--testing-scenarios)
 - [Razorpay Test Cards (India Domestic)](#-razorpay-test-cards-india-domestic)
 - [Automated Regression Test Suite](#-automated-regression-test-suite)
-- [Project Structure](#-project-structure)
+- [Project Structure & Routes](#-project-structure--routes)
 - [Environment Configuration](#-environment-configuration)
 
 ---
@@ -33,7 +34,7 @@ User: "wireless gaming mouse under ₹2000"
 Agent Workflow:
   1. Input Sanitization      ──► Strips XSS, SQLi, prompt injection; validates length (< 300 chars)
   2. Catalog Search          ──► Searches SQLite store.db using keyword token matching
-  3. AI Reasoning (Gemini)   ──► Evaluates candidate specs, rating, stock, and price
+  3. AI Reasoning (Gemini)   ──► Evaluates candidate specs, rating, stock, and price via locked-in model
   4. Safety Gate Check       ──► Validates price (≤ ₹5,000), quantity (≤ 3), category (electronics, accessories, peripherals)
   5. Cross-Sell Engine       ──► Suggests complementary in-catalog add-on (e.g., USB cable or mouse pad)
   6. Authorization Gate      ──► Renders interactive product card; user chooses to accept/decline add-on
@@ -55,7 +56,8 @@ Agent Workflow:
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           AI ORCHESTRATION LAYER                            │
-│  lib/agent.js: sanitizeInput() ──► Gemini 2.0 Flash agentic loop            │
+│  lib/agent.js: sanitizeInput() ──► Gemini agentic loop                      │
+│    ├── Model resolution      ──► process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
 │    ├── search_products tool  ──► lib/productSearch.js ──► SQLite (store.db) │
 │    ├── select_product tool   ──► lib/safety.js (enforces budget & categories)│
 │    └── audit logging         ──► lib/audit.js (immutably logs every event)  │
@@ -208,7 +210,7 @@ npm install
 ```
 
 ### 3. Setup Environment Variables
-Copy `.env.example` to create `.env.local`:
+Copy `.env.example` to `.env.local` (a pre-configured template is included in both the repository root and `buyer-agent/`):
 ```bash
 cp .env.example .env.local
 ```
@@ -218,6 +220,9 @@ Populate `.env.local` with your API credentials:
 # Required: Google Gemini API Key
 # Get from: https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Optional: Override default Gemini model (defaults to locked-in 'gemini-2.5-flash-lite')
+GEMINI_MODEL=gemini-2.5-flash-lite
 
 # Required: Razorpay Test Key ID & Secret
 # Get from: https://dashboard.razorpay.com/app/keys (Use TEST mode!)
@@ -307,18 +312,20 @@ Try these queries in the chat interface at `http://localhost:3000`:
 
 ## 💳 Razorpay Test Cards (India Domestic)
 
-> **Important:** Indian Razorpay merchant accounts enforce domestic INR processing by default. Standard international test cards (`4111 1111...`) will be declined by Razorpay. Use these official domestic test cards:
+> **Important:** Indian Razorpay merchant accounts process domestic INR transactions by default. Standard international test cards (such as `4111 1111 1111 1111`) are declined by Razorpay with *"International cards are not supported"*. Use these official domestic test cards:
 
 | Card Number | Network | Region / Type | Expected Outcome |
 |:---:|:---:|:---:|:---:|
 | `4100 2800 0000 1007` | Visa | India Domestic | **✓ Success (Paid)** |
 | `5500 6700 0000 1002` | Mastercard | India Domestic | **✓ Success (Paid)** |
 | `6527 6589 0000 1005` | RuPay | India Domestic | **✓ Success (Paid)** |
-| `4000 0000 0000 0002` | Visa | Domestic Decline | **✗ Decline (`PAYMENT_FAILED`)** |
 
 - **Expiry:** Any future date (e.g. `12/28`)
 - **CVV:** Any 3 digits (e.g. `123`)
-- **OTP Bank Simulator:** Enter any 4–6 digit number (e.g. `123456`) to simulate success; enter `< 4 digits` to simulate failure.
+- **OTP Bank Simulator:** Enter any **4–10 digit number** (e.g. `123456`) to simulate success; enter `< 4 digits` (e.g. `123`) to simulate a bank decline.
+- **Simulating Declines / Failures:** In Razorpay's sandbox, bank decline handling can be tested by:
+  1. Entering `< 4 digits` in the bank OTP simulator or clicking the **"Failure"** button on the mock bank screen.
+  2. Clicking the in-app **"⚡ Simulate Failure"** toggle on the checkout card before confirming payment.
 
 ---
 
@@ -343,7 +350,7 @@ node scripts/test-agent.mjs
 
 ---
 
-## 📁 Project Structure
+## 📁 Project Structure & Routes
 
 ```
 buyer-agent/
@@ -353,18 +360,18 @@ buyer-agent/
 │   ├── chat/
 │   │   ├── page.js            # Main conversational shopping UI & Razorpay modal handler
 │   │   └── chat.module.css    # Chat styling
-│   ├── dashboard/
-│   │   └── page.js            # Real-time audit trail and session inspector
 │   ├── audit/
-│   │   └── page.js            # Raw audit log table viewer
+│   │   └── page.js            # Primary Decision Trace & Audit Log dashboard (session filtering & JSON inspector)
+│   ├── dashboard/
+│   │   └── page.js            # Route alias / redirect component (forwards navigation directly to /audit)
 │   └── api/
 │       ├── agent/route.js     # AI agent conversational orchestrator
 │       ├── payment/route.js   # Razorpay order creation & signature verification
 │       ├── audit/route.js     # Audit log fetch and reset
-│       ├── search/route.js    # Keyword product search endpoint
-│       └── products/route.js  # Full catalog retrieval endpoint
+│       ├── search/route.js    # Standalone keyword search endpoint (GET /api/search?query=...&category=...&maxPrice=...)
+│       └── products/route.js  # Standalone full catalog retrieval endpoint (GET /api/products)
 ├── lib/
-│   ├── agent.js               # Gemini 2.0 Flash tool-calling & reasoning engine
+│   ├── agent.js               # Gemini tool-calling & reasoning engine (uses GEMINI_MODEL)
 │   ├── safety.js              # Hard safety validator (budget, category, quantity)
 │   ├── payment.js             # Razorpay API caller, HMAC verification, 24h cancellation
 │   ├── database.js            # SQLite connection singleton & schema migrations
@@ -376,9 +383,16 @@ buyer-agent/
 │   ├── test-agent.mjs         # 36-check end-to-end automated test suite
 │   ├── test-503-retry.mjs     # 503 resilience and exponential backoff test
 │   └── test-outer-budget.mjs  # Safety boundary tests
+├── .env.example               # Template environment configuration (no secrets)
 ├── .env.local                 # API keys (never tracked in git)
 └── package.json               # Next.js 16, React 19, Gemini SDK, Razorpay SDK
 ```
+
+> **Note on `/dashboard` vs `/audit`:**  
+> `/audit` is the primary interactive dashboard containing the full decision trace, session filter, and raw audit log viewer. `/dashboard` exists as a client-side alias route (`buyer-agent/app/dashboard/page.js`) that automatically redirects to `/audit`.
+
+> **Note on Search & Catalog Endpoints:**  
+> The AI Buyer Agent invokes `searchProducts()` in `lib/productSearch.js` in-process during its tool-calling reasoning loop. `/api/search` and `/api/products` are exposed as standalone REST endpoints for direct catalog inspection, testing, and external tools.
 
 ---
 
@@ -386,7 +400,8 @@ buyer-agent/
 
 | Variable | Required | Default | Description |
 |---|:---:|:---:|---|
-| `GEMINI_API_KEY` | **Yes** | — | Google AI Studio API Key for Gemini 2.0 Flash |
+| `GEMINI_API_KEY` | **Yes** | — | Google AI Studio API Key for Gemini |
+| `GEMINI_MODEL` | No | `gemini-2.5-flash-lite` | Model identifier used by `@google/genai` (resolved in `lib/agent.js`) |
 | `RAZORPAY_KEY_ID` | **Yes** | — | Razorpay API Key ID (Test Mode: `rzp_test_...`) |
 | `RAZORPAY_KEY_SECRET` | **Yes** | — | Razorpay API Key Secret |
 | `MAX_BUDGET_INR` | No | `5000` | Maximum spend allowed per transaction in INR |
