@@ -44,3 +44,7 @@ next-env.d.ts
 *.backup
 store.db.backup
 ecommerce.db.backup
+
+# SQLite WAL mode files
+*.db-shm
+*.db-wal
