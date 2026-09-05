@@ -58,25 +58,31 @@ export async function getOrCreateCustomer(sessionId) {
  *
  * @returns {{ success: boolean, orderId?: string, razorpayOrder?: object, error?: string, dbOrderId?: number }}
  */
-export async function createOrder({ sessionId, productId, quantity, priceInr, productName }) {
-  const amountPaise = priceInr * quantity * 100; // Razorpay expects paise
+export async function createOrder({ sessionId, productId, quantity, priceInr, productName, addonProduct, addonPriceInr }) {
+  const addonAmountPaise = addonProduct ? ((addonPriceInr || addonProduct.price) * 100) : 0;
+  const amountPaise = (priceInr * quantity * 100) + addonAmountPaise; // Razorpay expects paise
   const db = getDb();
   const now = new Date().toISOString();
+  const addonId = addonProduct ? addonProduct.id : null;
 
   // Insert order in DB as pending BEFORE calling Razorpay (no orphan orders)
   const insertResult = db.prepare(`
-    INSERT INTO orders (session_id, product_id, quantity, amount, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'pending', ?, ?)
-  `).run(sessionId, productId, quantity, amountPaise, now, now);
+    INSERT INTO orders (session_id, product_id, addon_product_id, quantity, amount, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+  `).run(sessionId, productId, addonId, quantity, amountPaise, now, now);
 
   const dbOrderId = insertResult.lastInsertRowid;
+
+  const itemDescription = addonProduct
+    ? `"${productName}" x${quantity} + Add-on: "${addonProduct.name}" = ₹${(priceInr * quantity) + (addonPriceInr || addonProduct.price)}`
+    : `"${productName}" x${quantity} = ₹${priceInr * quantity}`;
 
   logAction({
     sessionId,
     action: 'PAYMENT_INIT',
-    reasoning: `Creating Razorpay order for "${productName}" x${quantity} = ₹${priceInr * quantity}`,
+    reasoning: `Creating Razorpay order for ${itemDescription}`,
     result: 'pending',
-    metadata: { dbOrderId, productId, quantity, amountPaise },
+    metadata: { dbOrderId, productId, addonProductId: addonId, quantity, amountPaise },
   });
 
   try {
@@ -86,8 +92,9 @@ export async function createOrder({ sessionId, productId, quantity, priceInr, pr
       receipt: `order_${dbOrderId}`,
       notes: {
         session_id: sessionId,
-        product_name: productName,
+        product_name: addonProduct ? `${productName} + ${addonProduct.name}` : productName,
         quantity: String(quantity),
+        addon_product_id: addonId ? String(addonId) : '',
       },
     });
 
@@ -250,9 +257,12 @@ export async function confirmPayment({
 
   // Decrement stock using quantity from order
   db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(order.quantity, order.product_id);
+  if (order.addon_product_id) {
+    db.prepare('UPDATE products SET stock = stock - 1 WHERE id = ?').run(order.addon_product_id);
+  }
 
-  // Set cancellation deadline: 2 days from now
-  const deadline = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+  // Set cancellation deadline: 24 hours from now
+  const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   db.prepare('UPDATE orders SET cancellation_deadline = ? WHERE id = ?').run(deadline, dbOrderId);
 
   logAction({
@@ -289,6 +299,9 @@ export async function cancelOrder({ dbOrderId, sessionId }) {
   db.prepare('UPDATE orders SET status = \'cancelled\', updated_at = ? WHERE id = ?')
     .run(new Date().toISOString(), dbOrderId);
   db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?').run(order.quantity, order.product_id);
+  if (order.addon_product_id) {
+    db.prepare('UPDATE products SET stock = stock + 1 WHERE id = ?').run(order.addon_product_id);
+  }
 
   logAction({
     sessionId,

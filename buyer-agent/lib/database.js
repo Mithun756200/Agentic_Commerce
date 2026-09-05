@@ -70,9 +70,19 @@ function initSchema(db) {
       cancellation_deadline TEXT,
       created_at            TEXT    NOT NULL,
       updated_at            TEXT    NOT NULL,
-      FOREIGN KEY (product_id) REFERENCES products(id)
+      addon_product_id      INTEGER,
+      FOREIGN KEY (product_id) REFERENCES products(id),
+      FOREIGN KEY (addon_product_id) REFERENCES products(id)
     );
   `);
+
+  // Migration: add addon_product_id column to existing orders tables if missing
+  try {
+    const colCheck = db.prepare("PRAGMA table_info(orders)").all();
+    if (!colCheck.some(c => c.name === 'addon_product_id')) {
+      db.exec('ALTER TABLE orders ADD COLUMN addon_product_id INTEGER REFERENCES products(id)');
+    }
+  } catch { /* non-fatal */ }
 
   // Settings table for user-adjustable, server-enforced safety limits
   db.exec(`
@@ -110,6 +120,7 @@ function initSchema(db) {
   for (const col of [
     'ALTER TABLE orders ADD COLUMN razorpay_payment_id TEXT',
     'ALTER TABLE orders ADD COLUMN cancellation_deadline TEXT',
+    'ALTER TABLE orders ADD COLUMN addon_product_id INTEGER',
   ]) {
     try { db.exec(col); } catch (_) {}
   }

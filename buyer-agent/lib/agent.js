@@ -18,6 +18,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { searchProducts } from './productSearch.js';
 import { validatePurchase, SAFETY_CONFIG, getActiveSafetyLimits } from './safety.js';
+import { getRecommendationForProduct } from './recommendations.js';
 
 import { logAction } from './audit.js';
 
@@ -560,6 +561,25 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
           stock: selectedProduct.stock,
         });
 
+        let recommendation = null;
+        if (safetyResult.allowed) {
+          recommendation = getRecommendationForProduct(selectedProduct.id, sessionId);
+          if (recommendation) {
+            logAction({
+              sessionId,
+              action: 'RECOMMENDATION_SHOWN',
+              reasoning: `Suggested add-on: "${recommendation.addon.name}" for ₹${recommendation.addon.price} — ${recommendation.reason}`,
+              result: 'shown',
+              metadata: {
+                primaryProductId: selectedProduct.id,
+                addonProductId: recommendation.addon.id,
+                addonPrice: recommendation.addon.price,
+                reason: recommendation.reason,
+              },
+            });
+          }
+        }
+
         return {
           type: 'product_selection',
           text: finalText,
@@ -569,6 +589,7 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
           explanation: selectionExplanation,
           safetyCheck: safetyResult,
           searchResults,
+          recommendation,
         };
       }
 
@@ -709,14 +730,38 @@ function buildSafeHistory(history) {
   // Gemini requires history to start with a user message
   let start = 0;
   while (start < mapped.length && mapped[start].role !== 'user') start++;
-  return mapped.slice(start);
+  const trimmed = mapped.slice(start);
+
+  // Ensure alternating roles: user, model, user, model...
+  const alternated = [];
+  for (const msg of trimmed) {
+    if (alternated.length === 0) {
+      if (msg.role === 'user') alternated.push(msg);
+    } else {
+      const last = alternated[alternated.length - 1];
+      if (last.role === msg.role) {
+        // If two consecutive messages have the same role, merge their text into one turn
+        last.parts[0].text += `\n${msg.parts[0].text}`;
+      } else {
+        alternated.push(msg);
+      }
+    }
+  }
+
+  // Because the current user message will be appended with role 'user',
+  // safeHistory must end with a 'model' message if it's not empty.
+  if (alternated.length > 0 && alternated[alternated.length - 1].role === 'user') {
+    alternated.pop();
+  }
+
+  return alternated;
 }
 
 function buildSystemPrompt() {
   return `You are an AI Buyer Agent for an e-commerce platform. Your job is to help users find and buy products.
 
 WORKFLOW (follow this strictly):
-1. When a user describes what they want to buy, ALWAYS call search_products first with relevant filters.
+1. When a user describes what they want to buy, ALWAYS call search_products first with relevant filters. Focus on the user's latest request. If earlier conversation turns mention a previously searched, selected, or purchased product, treat the user's new message as a fresh, independent request. Do NOT combine earlier product keywords with the new request unless the user explicitly asks to combine them (e.g. "also buy", "both", "add a ... as well").
 2. Review the search results carefully.
 3. If results are found, you MUST call select_product with the single best matching product and an explanation. Do NOT just list products in text — call select_product. Always call select_product even if the product exceeds the user's budget or belongs to a restricted category (e.g. furniture), so that our server-side safety engine can formally inspect the item, log the check to the audit trail, and enforce guardrails.
 4. If no results are found at all, tell the user politely and suggest broadening the search.

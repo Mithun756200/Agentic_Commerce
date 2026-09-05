@@ -59,6 +59,128 @@ const SCENARIOS = [
   },
 ];
 
+/* ── Pre-Payment Cross-Sell Recommendation Card ────────────────────────────── */
+function CrossSellCard({
+  recommendation,
+  primaryProduct,
+  addonState,
+  onAccept,
+  onDecline,
+  loading = false,
+}) {
+  if (!recommendation || !recommendation.addon) return null;
+  const { addon, reason } = recommendation;
+
+  if (addonState?.status === 'accepted') {
+    return (
+      <div style={{
+        marginTop: 14,
+        marginBottom: 10,
+        padding: '10px 14px',
+        background: 'rgba(52, 211, 153, 0.08)',
+        border: '1px solid var(--status-pass-border, rgba(52, 211, 153, 0.3))',
+        borderLeft: '4px solid var(--status-pass, #34D399)',
+        borderRadius: 'var(--radius-sm, 6px)',
+        fontSize: '0.8rem',
+        fontFamily: 'var(--font-mono)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        color: 'var(--text-primary)',
+      }}>
+        <div>
+          <span style={{ color: 'var(--status-pass)', fontWeight: 'bold' }}>✓ ADD-ON ADDED: </span>
+          <strong>{addon.name}</strong> (+{formatINR(addon.price)})
+        </div>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>Included in Authorization Gate below</span>
+      </div>
+    );
+  }
+
+  if (addonState?.status === 'declined') {
+    return (
+      <div style={{
+        marginTop: 14,
+        marginBottom: 10,
+        padding: '8px 14px',
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid var(--border-subtle, #2C261E)',
+        borderRadius: 'var(--radius-sm, 6px)',
+        fontSize: '0.75rem',
+        fontFamily: 'var(--font-mono)',
+        color: 'var(--text-muted)',
+      }}>
+        ✕ Add-on recommendation declined — proceeding with primary item only.
+      </div>
+    );
+  }
+
+  if (addonState?.status === 'rejected_safety') {
+    return (
+      <div style={{
+        marginTop: 14,
+        marginBottom: 10,
+        padding: '10px 14px',
+        background: 'rgba(239, 68, 68, 0.1)',
+        border: '1px solid var(--status-fail-border, rgba(239, 68, 68, 0.3))',
+        borderLeft: '4px solid var(--status-fail, #EF4444)',
+        borderRadius: 'var(--radius-sm, 6px)',
+        fontSize: '0.78rem',
+        fontFamily: 'var(--font-mono)',
+        lineHeight: 1.5,
+        color: 'var(--text-primary)',
+      }}>
+        <div style={{ color: 'var(--status-fail)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>⚠ ADD-ON REJECTED BY SAFETY ENGINE</span>
+        </div>
+        <div style={{ marginTop: 4, color: 'var(--text-secondary)' }}>
+          {addonState.reason}
+        </div>
+        <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+          Proceeding with original item ({primaryProduct.name}) only.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.crossSellCard}>
+      <div className={styles.crossSellTop}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className={styles.crossSellBadge}>Recommended Add-On</span>
+          <span className={styles.crossSellName}>{addon.name}</span>
+        </div>
+        <span className={styles.crossSellPrice}>+{formatINR(addon.price)}</span>
+      </div>
+
+      <div className={styles.crossSellReason}>
+        💡 <span style={{ fontStyle: 'italic' }}>{reason}</span>
+      </div>
+
+      <div className={styles.crossSellActions}>
+        <button
+          type="button"
+          className="btn btn-paper btn-sm"
+          style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+          onClick={onAccept}
+          disabled={loading}
+        >
+          {loading ? 'Validating…' : `+ Add to Order (+${formatINR(addon.price)})`}
+        </button>
+        <button
+          type="button"
+          className="btn btn-dark btn-sm"
+          style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+          onClick={onDecline}
+          disabled={loading}
+        >
+          No thanks
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Mandatory Human Authorization Gate ──────────────────────────────────── */
 function AuthorizationGate({
   product,
@@ -66,12 +188,14 @@ function AuthorizationGate({
   requestedQuantity,
   explanation,
   safetyCheck,
+  addonProduct = null,
   onAuthorize,
   onSimulateFailure,
   onAbort,
   pending,
 }) {
-  const total = product.price * quantity;
+  const addonPrice = addonProduct ? addonProduct.price : 0;
+  const total = (product.price * quantity) + addonPrice;
   const isAllowed = safetyCheck?.allowed;
   // Show quantity-cap notice if user asked for more than the agent selected
   const quantityCapped = requestedQuantity && requestedQuantity > quantity;
@@ -137,16 +261,37 @@ function AuthorizationGate({
               <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: '0.75rem' }}>(SKU #{product.id})</span>
             </td>
           </tr>
+          {addonProduct && (
+            <tr>
+              <td className={styles.authTableLabel} style={{ color: 'var(--accent-gold)' }}>COMPLEMENTARY ADD-ON</td>
+              <td className={styles.authTableVal}>
+                <strong>{addonProduct.name}</strong>
+                <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: '0.75rem' }}>(SKU #{addonProduct.id})</span>
+              </td>
+            </tr>
+          )}
           <tr>
             <td className={styles.authTableLabel}>UNIT PRICE × QTY</td>
             <td className={styles.authTableVal}>
-              <span className="font-mono">{formatINR(product.price)} × {quantity} unit{quantity > 1 ? 's' : ''}</span>
+              <span className="font-mono">
+                {formatINR(product.price)} × {quantity} unit{quantity > 1 ? 's' : ''}
+                {addonProduct && (
+                  <span style={{ color: 'var(--accent-gold)', marginLeft: 8 }}>
+                    + {formatINR(addonProduct.price)} × 1 unit
+                  </span>
+                )}
+              </span>
             </td>
           </tr>
           <tr>
             <td className={styles.authTableLabel}>AUTHORIZED AMOUNT</td>
             <td>
               <span className={styles.authAmount}>{formatINR(total)}</span>
+              {addonProduct && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', marginLeft: 10, fontFamily: 'var(--font-mono)' }}>
+                  (Combined Order)
+                </span>
+              )}
             </td>
           </tr>
           <tr>
@@ -388,10 +533,12 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
   const [loading, setLoading] = useState(false);
   const [pendingId, setPendingId] = useState(null);
   const [orderResults, setOrderResults] = useState({});
+  const [addonStates, setAddonStates] = useState({});
+  const [validatingAddonId, setValidatingAddonId] = useState(null);
   const [retryState, setRetryState] = useState(null);
   const [loadingElapsed, setLoadingElapsed] = useState(0);
 
-  // Rehydrate sessionId, messages, and orderResults from sessionStorage if this tab already has a session
+  // Rehydrate sessionId, messages, orderResults, and addonStates from sessionStorage if this tab already has a session
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(CHAT_STORAGE_KEY);
@@ -403,6 +550,9 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
           if (parsed.orderResults && typeof parsed.orderResults === 'object') {
             setOrderResults(parsed.orderResults);
           }
+          if (parsed.addonStates && typeof parsed.addonStates === 'object') {
+            setAddonStates(parsed.addonStates);
+          }
           return;
         }
       }
@@ -412,7 +562,7 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
     setSessionId(generateSessionId());
   }, []);
 
-  // Persist current session's message array, session ID, and order results to sessionStorage on every update
+  // Persist current session's message array, session ID, order results, and addonStates to sessionStorage on every update
   useEffect(() => {
     if (!sessionId) return;
     try {
@@ -422,10 +572,11 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
           sessionId,
           messages,
           orderResults,
+          addonStates,
         })
       );
     } catch (_) {}
-  }, [sessionId, messages, orderResults]);
+  }, [sessionId, messages, orderResults, addonStates]);
 
   const streamEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -538,8 +689,21 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
 
     try {
       const history = messages
-        .filter(m => m.content && !m.product)
-        .map(m => ({ role: m.role === 'user' ? 'user' : 'model', content: m.content }));
+        .filter(m => m.content || m.product)
+        .map(m => {
+          if (m.role === 'user') {
+            return { role: 'user', content: m.content };
+          }
+          let text = m.content || m.explanation || '';
+          if (m.product) {
+            const isPaid = orderResults[m.id]?.success;
+            const statusNote = isPaid
+              ? `[Order completed & paid for ${m.product.name} (₹${m.product.price})]`
+              : `[Selected product: ${m.product.name} (₹${m.product.price})]`;
+            text = text ? `${text}\n${statusNote}` : statusNote;
+          }
+          return { role: 'model', content: text };
+        });
 
       let start = 0;
       while (start < history.length && history[start].role !== 'user') start++;
@@ -597,6 +761,7 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
         explanation: data.explanation || '',
         safetyCheck: data.safetyCheck || null,
         searchResults: data.searchResults || [],
+        recommendation: data.recommendation || null,
       };
 
       setMessages(prev => [...prev, agentMsg]);
@@ -629,8 +794,81 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
     }
   }, [searchParams, sessionId, sendMessage]);
 
+  // Handle cross-sell add-on decision (accept / decline)
+  const handleAddonDecision = async (msg, choice) => {
+    hasUserInteractedRef.current = true;
+    if (choice === 'decline') {
+      try {
+        await fetch('/api/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'validate_cart',
+            sessionId,
+            decision: 'decline',
+            product: msg.product,
+            recommendation: msg.recommendation,
+          }),
+        });
+      } catch (_) {}
+      setAddonStates(prev => ({
+        ...prev,
+        [msg.id]: { status: 'declined', addon: null },
+      }));
+      return;
+    }
+
+    // choice === 'accept'
+    setValidatingAddonId(msg.id);
+    try {
+      const res = await fetch('/api/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'validate_cart',
+          sessionId,
+          decision: 'accept',
+          product: msg.product,
+          recommendation: msg.recommendation,
+          quantity: msg.quantity || 1,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.allowed) {
+        setAddonStates(prev => ({
+          ...prev,
+          [msg.id]: {
+            status: 'accepted',
+            addon: msg.recommendation.addon || msg.recommendation.item,
+            error: null,
+          },
+        }));
+      } else {
+        setAddonStates(prev => ({
+          ...prev,
+          [msg.id]: {
+            status: 'blocked',
+            addon: null,
+            error: data.reason || 'Add-on cannot be added due to policy limit.',
+          },
+        }));
+      }
+    } catch (err) {
+      setAddonStates(prev => ({
+        ...prev,
+        [msg.id]: {
+          status: 'blocked',
+          addon: null,
+          error: `Validation network error: ${err.message}`,
+        },
+      }));
+    } finally {
+      setValidatingAddonId(null);
+    }
+  };
+
   // Handle Authorize Purchase & Real Razorpay Checkout
-  const handleAuthorize = async (msgId, product, quantity, simulateFailure) => {
+  const handleAuthorize = async (msgId, product, quantity, simulateFailure, addonProduct = null) => {
     hasUserInteractedRef.current = true;
     setPendingId(msgId);
     try {
@@ -644,6 +882,8 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
           quantity,
           priceInr: product.price,
           productName: product.name,
+          addonProduct: addonProduct || undefined,
+          addonPriceInr: addonProduct ? addonProduct.price : undefined,
         }),
       });
       const createData = await createRes.json();
@@ -701,12 +941,16 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
       const { razorpayKeyId, customerId } = await keyRes.json();
       const activeCustomerId = createData.customerId || customerId;
 
+      const orderDesc = addonProduct
+        ? `${product.name} (x${quantity}) + ${addonProduct.name}`
+        : `${product.name} (x${quantity})`;
+
       const rzp = new window.Razorpay({
         key: razorpayKeyId,
         amount: createData.razorpayOrder.amount,
         currency: createData.razorpayOrder.currency,
         name: 'Razorpay Agentic Commerce',
-        description: `${product.name} (x${quantity})`,
+        description: orderDesc,
         order_id: createData.razorpayOrder.id,
         customer_id: activeCustomerId || undefined,
         remember_customer: true,
@@ -890,15 +1134,85 @@ Describe what you're looking for (e.g. "wireless gaming mouse under ₹2000"). I
                   </div>
                 )}
 
-                {msg.product && !orderResults[msg.id] && (
+                {msg.product && !orderResults[msg.id] && msg.recommendation && !addonStates[msg.id] && (
+                  <CrossSellCard
+                    recommendation={msg.recommendation}
+                    onAccept={() => handleAddonDecision(msg, 'accept')}
+                    onDecline={() => handleAddonDecision(msg, 'decline')}
+                    loading={validatingAddonId === msg.id}
+                  />
+                )}
+
+                {msg.product && !orderResults[msg.id] && addonStates[msg.id]?.status === 'blocked' && (
+                  <div style={{
+                    margin: '10px 0',
+                    padding: '10px 14px',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    borderLeft: '4px solid #EF4444',
+                    borderRadius: 'var(--radius-xs)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.8rem',
+                    color: '#FCA5A5',
+                  }}>
+                    <span style={{ fontWeight: 600 }}>🛡️ ADD-ON BLOCKED BY SAFETY GATE:</span> {addonStates[msg.id].error}
+                    <div style={{ marginTop: 4, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Proceeding with primary item only.
+                    </div>
+                  </div>
+                )}
+
+                {msg.product && !orderResults[msg.id] && addonStates[msg.id]?.status === 'accepted' && (
+                  <div style={{
+                    margin: '10px 0',
+                    padding: '8px 12px',
+                    background: 'rgba(34, 197, 94, 0.1)',
+                    border: '1px solid rgba(34, 197, 94, 0.3)',
+                    borderRadius: 'var(--radius-xs)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.78rem',
+                    color: 'var(--status-pass)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <span>✓ Added complementary item: <strong>{addonStates[msg.id].addon?.name}</strong> (+{formatINR(addonStates[msg.id].addon?.price)})</span>
+                  </div>
+                )}
+
+                {msg.product && !orderResults[msg.id] && addonStates[msg.id]?.status === 'declined' && (
+                  <div style={{
+                    margin: '8px 0',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
+                    fontFamily: 'var(--font-mono)'
+                  }}>
+                    <span>• Add-on declined. Proceeding with primary item only.</span>
+                  </div>
+                )}
+
+                {msg.product && !orderResults[msg.id] && (!msg.recommendation || addonStates[msg.id]) && (
                   <AuthorizationGate
                     product={msg.product}
                     quantity={msg.quantity}
                     requestedQuantity={msg.requestedQuantity}
                     explanation={msg.explanation}
                     safetyCheck={msg.safetyCheck}
-                    onAuthorize={() => handleAuthorize(msg.id, msg.product, msg.quantity, false)}
-                    onSimulateFailure={() => handleAuthorize(msg.id, msg.product, msg.quantity, true)}
+                    addonProduct={addonStates[msg.id]?.status === 'accepted' ? addonStates[msg.id].addon : null}
+                    onAuthorize={() => handleAuthorize(
+                      msg.id,
+                      msg.product,
+                      msg.quantity,
+                      false,
+                      addonStates[msg.id]?.status === 'accepted' ? addonStates[msg.id].addon : null
+                    )}
+                    onSimulateFailure={() => handleAuthorize(
+                      msg.id,
+                      msg.product,
+                      msg.quantity,
+                      true,
+                      addonStates[msg.id]?.status === 'accepted' ? addonStates[msg.id].addon : null
+                    )}
                     onAbort={() => {
                       setOrderResults(prev => ({
                         ...prev,

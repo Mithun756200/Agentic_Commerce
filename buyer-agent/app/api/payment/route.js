@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server';
 import { createOrder, confirmPayment, cancelOrder, dismissCheckout, getOrCreateCustomer } from '@/lib/payment';
 import { logAction } from '@/lib/audit';
+import { validateCombinedCart } from '@/lib/recommendations';
 
 // Return the public Razorpay key so the browser doesn't need process.env
 export async function GET(request) {
@@ -39,20 +40,117 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'action and sessionId are required' }, { status: 400 });
     }
 
+    // ── Cross-sell cart validation & recommendation choice ─────────────────
+    if (action === 'validate_cart') {
+      const primary = body.primary || body.product;
+      const primaryQuantity = body.primaryQuantity || body.quantity || 1;
+      const addon = body.addon || body.recommendation?.addon || body.recommendation?.item;
+      const userChoice = body.choice || body.decision;
+
+      if (userChoice === 'declined' || userChoice === 'decline') {
+        logAction({
+          sessionId,
+          action: 'RECOMMENDATION_REJECTED',
+          reasoning: `User declined add-on: "${addon?.name || 'addon'}"`,
+          result: 'rejected',
+          metadata: {
+            primaryProductId: primary?.id,
+            addonProductId: addon?.id,
+            userChoice: 'declined',
+          },
+        });
+        return NextResponse.json({ success: true, allowed: true, choice: 'declined' });
+      }
+
+      // Choice is 'accepted'
+      const check = validateCombinedCart({ primary, primaryQuantity, addon });
+
+      if (check.allowed) {
+        logAction({
+          sessionId,
+          action: 'RECOMMENDATION_ACCEPTED',
+          reasoning: `User accepted add-on: "${addon.name}" (+₹${addon.price}) — combined total: ₹${check.combinedTotal}`,
+          result: 'accepted',
+          metadata: {
+            primaryProductId: primary.id,
+            addonProductId: addon.id,
+            addonPrice: addon.price,
+            combinedTotal: check.combinedTotal,
+          },
+        });
+
+        logAction({
+          sessionId,
+          action: 'SAFETY_CHECK',
+          reasoning: `Combined order safety check passed. Total amount ₹${check.combinedTotal} within budget ₹${check.limitsApplied.MAX_BUDGET_INR}.`,
+          result: 'passed',
+          metadata: {
+            primaryProductId: primary.id,
+            addonProductId: addon.id,
+            combinedTotal: check.combinedTotal,
+            safetyConfig: check.limitsApplied,
+          },
+        });
+
+        return NextResponse.json({ success: true, allowed: true, choice: 'accepted', check, reason: check.reason });
+      } else {
+        // Add-on specifically rejected by safety engine
+        logAction({
+          sessionId,
+          action: 'SAFETY_CHECK',
+          reasoning: check.reason,
+          result: 'blocked',
+          metadata: {
+            primaryProductId: primary.id,
+            addonProductId: addon.id,
+            combinedTotal: check.combinedTotal,
+            safetyConfig: check.limitsApplied,
+          },
+        });
+
+        logAction({
+          sessionId,
+          action: 'RECOMMENDATION_REJECTED',
+          reasoning: `Add-on rejected by safety engine: ${check.reason}`,
+          result: 'rejected',
+          metadata: {
+            primaryProductId: primary.id,
+            addonProductId: addon.id,
+            reason: check.reason,
+            combinedTotal: check.combinedTotal,
+          },
+        });
+
+        return NextResponse.json({ success: true, allowed: false, choice: 'rejected_safety', check, reason: check.reason });
+      }
+    }
+
     // ── Create order (called after user clicks "Approve & Pay") ─────────────
     if (action === 'create_order') {
-      const { productId, quantity, priceInr, productName } = body;
+      const { productId, quantity, priceInr, productName, addonProduct, addonPriceInr } = body;
+
+      const totalInr = (priceInr * quantity) + (addonProduct ? (addonPriceInr || addonProduct.price) : 0);
+      const approvalReason = addonProduct
+        ? `User explicitly approved purchase of "${productName}" x${quantity} + Add-on "${addonProduct.name}" for ₹${totalInr}`
+        : `User explicitly approved purchase of "${productName}" x${quantity} for ₹${priceInr * quantity}`;
 
       logAction({
         sessionId,
         action: 'USER_APPROVED',
-        reasoning: `User explicitly approved purchase of "${productName}" x${quantity} for ₹${priceInr * quantity}`,
+        reasoning: approvalReason,
         result: 'approved',
-        metadata: { productId, quantity, priceInr, productName },
+        metadata: {
+          productId,
+          quantity,
+          priceInr,
+          productName,
+          addonProduct: addonProduct ? { id: addonProduct.id, name: addonProduct.name, price: addonProduct.price } : null,
+          totalInr,
+        },
       });
 
       const [result, customerId] = await Promise.all([
-        createOrder({ sessionId, productId, quantity, priceInr, productName }),
+        createOrder({ sessionId, productId, quantity, priceInr, productName, addonProduct, addonPriceInr }),
         getOrCreateCustomer(sessionId).catch((err) => {
           console.warn('[/api/payment POST create_order] Customer creation failed:', err.message);
           return null;
